@@ -1,69 +1,79 @@
 # WH3 Texture Converter
 
-A simple, client-side web tool to convert Total War: Warhammer 3 DDS textures to compressionless PNG and back. No installation, Python, or external tools required. Everything runs locally in your browser.
+A powerful, high-fidelity client-side web tool built to convert Total War: Warhammer 3 DDS textures to lossless PNG format and back. Zero installations, zero external Python dependencies, and zero cloud uploads required — everything compiles and swizzles locally inside your browser using hardware-accelerated web APIs.
 
 👉 **[Launch Tool](https://mrfaux.github.io/WH3TWTexConv/)**
 
 ---
 
-## What it does
+## 🚀 Key Features
 
-### DDS → PNG
-*   **Normal Maps:** Converts WH3's orange-tinted normal maps (DXT5nm) into standard blue OpenGL normal maps.
-*   **Material Maps:** Automatically splits channels and exports them as individual greyscale PNGs along with a merged RGB file.
-*   **Color & Masks:** Straight conversion to standard PNG.
+### DDS → PNG (Decoding)
+*   **Normal Map Swizzling:** Always decodes Warhammer 3's native DXT5nm orange-tinted maps into standard RGB.
+*   **Axis Alignment Toggles:** 
+    *   **Standard Blue (OpenGL):** Decodes into standard tangent-space normals (Y+ Up orientation).
+    *   **DirectX Normal (Y- Down):** Decodes and automatically inverts the Green (Y) channel to fit DirectX modding pipelines.
+    *   **Raw Orange (DXT5nm):** Outputs the original unswizzled orange-packed texture as a PNG (for advanced shader development).
+*   **Material Map Separation:** 
+    *   **Export Both:** Downloads the pre-packed merged RGB map *and* splits it into individual high-fidelity greyscale PNGs.
+    *   **Merged Only:** Exports only the combined texture file.
+    *   **Channels Only:** Exports separate metallic, roughness, and static ambient occlusion maps.
 
-### PNG → DDS
-*   **Normal Maps:** Converts standard blue normal maps back into the orange DXT5nm layout required by the engine.
-*   **Material Maps:** Rebuilds the custom material texture from individual channel maps or a merged file.
-*   **Formats Used:**
-    *   `Base_Colour`: `BC1_UNORM_SRGB`
-    *   `Material_Map`: `BC1_UNORM_SRGB`
-    *   `Normal`: `BC3_UNORM`
-    *   `Mask`: `BC3_UNORM`
-*   Optionally generates a full mipmap chain.
+### PNG → DDS (Encoding)
+*   **Normal Map Pack options:**
+    *   **Blue (Standard) Input:** Swizzles standard RGB normals back into the custom DXT5nm orange layout needed by WH3. Supports OpenGL (Y+) and DirectX (Y-) green channel flipping.
+    *   **Orange (Raw WH3) Input:** Directly encodes already-packed DXT5nm orange PNG files into DDS (pass-through).
+*   **Material Map Assembly:**
+    *   **Merged Map:** Pack your pre-combined RGB texture.
+    *   **Channels Mode:** Input individual R (Metalness) and G (Roughness) files. Unusable channels are hidden to prevent clutter (Blue is forced to `0`, AO/Alpha is forced to `255` per Warhammer 3 rendering standards).
+*   **Mipmap Generation:** Optionally calculates and packages a complete, correct mipmap chain.
 
 ---
 
-## Channels & Formatting
+## 🎨 Layout & Channels
 
-### Material Map Layout
-*   **Red:** Metalness (usually `0` or `255`).
-*   **Green:** Roughness.
-*   **Blue:** Unused (forced to `0` during encoding).
-*   **Alpha:** Ambient Occlusion / Static AO (defaults to `255` / `1.0`).
+### Material Map Standard (`BC1_UNORM_SRGB`)
+To reduce modder confusion and visual clutter, this tool auto-formats material layers to the exact Warhammer 3 render requirements:
+
+| Channel | Map Target | Default / Output Value |
+| :--- | :--- | :--- |
+| **Red (R)** | **Metalness** | User Supplied (usually 0 or 255) |
+| **Green (G)** | **Roughness** | User Supplied |
+| **Blue (B)** | *Unused* | **Hardcoded to `0`** |
+| **Alpha (A)** | **Ambient Occlusion** | **Hardcoded to `255` (1.0 static AO)** |
 
 ### Normal Map Channels (DXT5nm swizzle)
-To reconstruct the normal map, we use the vector length formula:
-`Z = sqrt(max(0, 1 - X^2 - Y^2))`
+Tangent-space normals are reconstructed from DXT5nm compressed channels using the vector length formula:
+`Z = sqrt(max(0, 1 - X² - Y²))`
 
-| Channel | Orange (Engine DDS) | Blue (Standard PNG) |
-|---|---|---|
-| **Red** | Gloss / Scale Multiplier | X Vector |
-| **Green** | Y Vector | Y Vector |
-| **Blue** | Unused (`0`) | Z Vector |
-| **Alpha** | X Vector | Unused (`255`) |
-
-*Swizzle logic based on [mr-phazer's TheAssetEditor](https://github.com/mr-phazer/TheAssetEditor).*
+| Channel | Orange (Engine DDS) | Blue (Standard OpenGL PNG) |
+| :--- | :--- | :--- |
+| **Red (R)** | Gloss / Scale Multiplier | X Vector (Right/Left) |
+| **Green (G)** | Y Vector (Up/Down) | Y Vector (Up/Down) |
+| **Blue (B)** | Unused (`0`) | Z Vector (Forward/Out) |
+| **Alpha (A)** | X Vector (Right/Left) | Unused (`255`) |
 
 ---
 
-## Hosting on GitHub Pages (Free)
+## 🛠️ Usage & Guidelines
 
-1. Create a public GitHub repository named `wh3-tex-converter`.
-2. Upload the contents of the `wh3-tex-web` folder:
-    *   `index.html`
-    *   `style.css`
-    *   `LICENSE`
-    *   `js/` (containing the scripts)
-3. Go to **Settings** -> **Pages** in your repository.
-4. Set the build source to **Deploy from a branch**, choose `main` / `root`, and hit **Save**.
+### 🟢 Recommended Default Setup
+If you are unsure which settings to choose, leave all controls at their default settings:
+*   **Standard Blue (OpenGL)** is the native coordinate system used by Blender, Substance Painter, Asset Editor, and most WH3 modeling tools.
+*   **DirectX normal format** is only needed if your target pipeline or engine utilizes flipped Y conventions (e.g. Unreal Engine, 3ds Max).
 
-The tool will be live at `https://<your-username>.github.io/wh3-tex-converter/` in a couple of minutes.
+---
 
-### Local Hosting
-If you want to run it on your own machine, serve the folder using a local server (needed for ES module support):
+## 💻 Local Hosting
+
+Since the app relies on ES Modules (`import`/`export`), opening the `index.html` file directly from your disk (via the `file://` protocol) will trigger browser CORS restrictions. You must serve it using a lightweight local web server:
+
 ```bash
-python -m http.server 8080
+# Python 3
+python -m http.server 5001
+
+# Node.js
+npx http-server -p 5001
 ```
-Then visit `http://localhost:8080`.
+
+Once running, navigate to `http://localhost:5001` in your browser.

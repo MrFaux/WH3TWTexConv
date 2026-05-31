@@ -216,21 +216,40 @@
 
         <!-- Normal Map -->
         <div class="encode-card">
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;width:100%;">
-            <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; width:100%; margin-bottom:16px;">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
               <span class="card-icon">🔵</span>
               <div>
                 <div class="card-title">Normal Map</div>
-                <div class="card-fmt" id="normalFmtLabel">BC3_UNORM · OpenGL input → WH3 Orange (DXT5nm)</div>
+                <div class="card-fmt" id="normalFmtLabel">BC3_UNORM · Blue Input (OpenGL Y+) → WH3 Orange (DXT5nm)</div>
               </div>
             </div>
-            <div class="mode-toggle">
-              <button class="toggle-btn active" id="btnEncNormOpenGL" onclick="setEncNormalMode(false)" type="button">OpenGL input</button>
-              <button class="toggle-btn" id="btnEncNormDX" onclick="setEncNormalMode(true)" type="button">DirectX input (flip Y)</button>
+          </div>
+
+          <!-- Compact controls inside the card -->
+          <div class="encode-card-options" style="margin-bottom:16px; display:flex; flex-direction:column; gap:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:600; color:var(--text-dim);">Input Format:</span>
+              <div class="mode-toggle">
+                <button class="toggle-btn active" id="btnEncNormBlue" onclick="setEncColorSpace('blue')" type="button">Blue (Standard)</button>
+                <button class="toggle-btn" id="btnEncNormOrange" onclick="setEncColorSpace('orange')" type="button">Orange (Raw WH3)</button>
+              </div>
+            </div>
+            
+            <div id="encNormYGroup" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:600; color:var(--text-dim);">Green (Y) Axis Direction:</span>
+              <div class="mode-toggle">
+                <button class="toggle-btn active" id="btnEncNormOpenGL" onclick="setEncNormalMode('opengl')" type="button">OpenGL (Y+)</button>
+                <button class="toggle-btn" id="btnEncNormDX" onclick="setEncNormalMode('directx')" type="button">DirectX (Y-)</button>
+              </div>
             </div>
           </div>
-          <div id="swizzleWarning" class="swizzle-warning" style="display:none;">
-            ⚠️ <strong>DirectX input mode:</strong> Your PNG has the green (Y) channel inverted (DirectX convention). It will be unflipped before encoding into WH3's orange DXT5nm format. If you're not sure, leave this on OpenGL.
+
+          <div id="swizzleWarning" class="swizzle-warning" style="display:none; margin-bottom:12px;">
+            ⚠️ <strong>DirectX input mode:</strong> The green channel is inverted (Y-). It will be unflipped to OpenGL before converting to WH3's orange DXT5nm format.
+          </div>
+          <div id="encOrangeWarning" class="swizzle-warning" style="display:none; margin-bottom:12px;">
+            ⚠️ <strong>Raw Orange mode:</strong> The PNG is assumed to already be packed in WH3's orange DXT5nm format. No swizzle or flip will be performed.
           </div>
           <div class="mini-drop" id="dropNormal"
                ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropNormal')"

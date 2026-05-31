@@ -10,8 +10,9 @@ const ddsQueue = [];   // { file, id, detectedType }
 const encFiles = {};   // key → { file, rgba, width, height }
 let queueId = 0;
 let materialMode  = 'merged'; // 'merged' or 'channels'
-let encInputDX    = false;    // PNG→DDS: input PNG is DX (flip Y before encode)
-let ddsOutputDX   = false;    // DDS→PNG: output PNG as DX (flip Y after decode)
+let encNormalType = 'blue';   // PNG→DDS normal: 'blue' (standard) or 'orange' (raw WH3)
+let encInputDX    = false;    // PNG→DDS normal: true if input is DirectX (Y-)
+let ddsOutputDX   = false;    // DDS→PNG normal: true if output should be DirectX (Y-)
 
 window.setMaterialMode = (mode) => {
   materialMode = mode;
@@ -33,22 +34,42 @@ window.setMaterialMode = (mode) => {
   }
 };
 
-// PNG→DDS normal: toggle whether the input PNG uses DirectX conventions (flipped Y)
-window.setEncNormalMode = (dx) => {
-  encInputDX = dx;
-  document.getElementById('btnEncNormOpenGL').classList.toggle('active', !dx);
-  document.getElementById('btnEncNormDX').classList.toggle('active', dx);
-  document.getElementById('swizzleWarning').style.display = dx ? 'block' : 'none';
+window.setEncColorSpace = (space) => {
+  encNormalType = space;
+  document.getElementById('btnEncNormBlue').classList.toggle('active', space === 'blue');
+  document.getElementById('btnEncNormOrange').classList.toggle('active', space === 'orange');
+  
+  // Show/Hide Y axis controls & warnings
+  document.getElementById('encNormYGroup').style.display = space === 'blue' ? 'flex' : 'none';
+  document.getElementById('encOrangeWarning').style.display = space === 'orange' ? 'block' : 'none';
+  document.getElementById('swizzleWarning').style.display = (space === 'blue' && encInputDX) ? 'block' : 'none';
+  
   const fmtLabel  = document.getElementById('normalFmtLabel');
   const dropLabel = document.getElementById('normalDropLabel');
-  if (dx) {
-    fmtLabel.textContent  = 'BC3_UNORM · DirectX input (Y flipped) → WH3 Orange';
-    dropLabel.textContent = 'Drop DirectX normal PNG or';
+  if (space === 'orange') {
+    fmtLabel.textContent  = 'BC3_UNORM · WH3 Orange (DXT5nm) Raw Input';
+    dropLabel.textContent = 'Drop WH3 Orange PNG or';
   } else {
-    fmtLabel.textContent  = 'BC3_UNORM · OpenGL input → WH3 Orange (DXT5nm)';
-    dropLabel.textContent = 'Drop OpenGL (blue) PNG or';
+    const yMode = encInputDX ? 'DirectX (Y-)' : 'OpenGL (Y+)';
+    fmtLabel.textContent  = `BC3_UNORM · Blue Input (${yMode}) → WH3 Orange (DXT5nm)`;
+    dropLabel.textContent = `Drop ${encInputDX ? 'DirectX' : 'OpenGL'} normal PNG or`;
   }
 };
+
+window.setEncNormalMode = (mode) => {
+  encInputDX = (mode === 'directx');
+  document.getElementById('btnEncNormOpenGL').classList.toggle('active', mode === 'opengl');
+  document.getElementById('btnEncNormDX').classList.toggle('active', mode === 'directx');
+  
+  document.getElementById('swizzleWarning').style.display = encInputDX ? 'block' : 'none';
+  
+  const fmtLabel  = document.getElementById('normalFmtLabel');
+  const dropLabel = document.getElementById('normalDropLabel');
+  const yMode = encInputDX ? 'DirectX (Y-)' : 'OpenGL (Y+)';
+  fmtLabel.textContent  = `BC3_UNORM · Blue Input (${yMode}) → WH3 Orange (DXT5nm)`;
+  dropLabel.textContent = `Drop ${encInputDX ? 'DirectX' : 'OpenGL'} normal PNG or`;
+};
+
 
 let ddsDecodeOrangeToBlue = true; // DDS→PNG: decode DXT5nm orange → blue
 let ddsMaterialOutputMode = 'both'; // DDS→PNG: both, merged, or channels
@@ -342,9 +363,12 @@ window.encodeType = async (type) => {
       if (!e) { log('logEncode', 'No normal map PNG loaded.', 'warn'); return; }
       ({ width, height } = e);
       stem = e.file.name.replace(/\.[^.]+$/, '');
-      // If input is DirectX format (Y flipped), flip Y first so blueToOrange gets OpenGL
-      const normalRgba = encInputDX ? flipNormalY(e.rgba, width, height) : e.rgba;
-      rgba = blueToOrange(normalRgba, width, height);  // OpenGL → WH3 orange (DXT5nm)
+      if (encNormalType === 'blue') {
+        const normalRgba = encInputDX ? flipNormalY(e.rgba, width, height) : e.rgba;
+        rgba = blueToOrange(normalRgba, width, height);  // OpenGL → WH3 orange (DXT5nm)
+      } else {
+        rgba = e.rgba; // Raw WH3 Orange pass-through (already formatted)
+      }
 
     } else if (type === 'material') {
       if (materialMode === 'merged') {
