@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WH3 Texture Converter</title>
+  <meta name="description" content="Convert Warhammer 3 Total War DDS textures to PNG and back — runs entirely in your browser, no install needed."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <div class="bg-particles"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 36 36" fill="none">
+          <path d="M18 3L33 12V24L18 33L3 24V12L18 3Z" stroke="url(#g1)" stroke-width="2"/>
+          <path d="M18 9L27 14.5V22L18 27L9 22V14.5L18 9Z" fill="url(#g2)" opacity="0.4"/>
+          <circle cx="18" cy="18" r="4" fill="url(#g1)"/>
+          <defs>
+            <linearGradient id="g1" x1="3" y1="3" x2="33" y2="33" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#c8a96e"/><stop offset="100%" stop-color="#7b5ea7"/>
+            </linearGradient>
+            <linearGradient id="g2" x1="9" y1="9" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#c8a96e"/><stop offset="100%" stop-color="#7b5ea7"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="logo-text">
+          <span class="logo-title">WH3 Texture Converter</span>
+          <span class="logo-sub">Warhammer III · DDS ↔ PNG · Runs in Browser</span>
+    </div>
+  </header>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabDdsToPng" onclick="switchTab('ddstopng')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3L16 9H13V17H7V9H4L10 3Z"/></svg>
+      DDS → PNG
+    </button>
+    <button class="tab-btn" id="tabPngToDds" onclick="switchTab('pngtodds')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 17L4 11H7V3H13V11H16L10 17Z"/></svg>
+      PNG → DDS
+    </button>
+  </div>
+
+  <main class="main-content">
+
+    <!-- ═══════════════════ DDS → PNG ═══════════════════ -->
+    <section id="panelDdsToPng" class="panel active">
+      <div class="panel-header">
+        <h1>DDS to PNG Conversion</h1>
+        <p>Drop your DDS files below. Type is auto-detected from filename suffix
+          (<code>_normal</code>, <code>_material_map</code>, <code>_base_colour</code>, <code>_mask</code>).
+          Normal maps are swizzled from WH3 orange (DXT5nm) to standard OpenGL blue.
+          Material maps are exported as merged RGB <em>and</em> split into metallic / roughness / AO greyscale PNGs.
+          Files are downloaded directly to your browser's download folder.</p>
+      </div>
+
+      <div class="legend-row">
+        <div class="legend-chip normal">Normal → OpenGL Blue</div>
+        <div class="legend-chip material">Material → Split R/G/B + Merged</div>
+        <div class="legend-chip colour">Base Colour → PNG</div>
+        <div class="legend-chip mask">Mask → PNG + Alpha</div>
+      </div>
+
+      <div class="drop-zone" id="dropZoneDds"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event,'dropZoneDds')"
+           ondrop="handleDropDds(event)">
+        <div class="drop-inner">
+          <div class="drop-icon">
+            <svg viewBox="0 0 64 64" fill="none">
+              <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
+              <path d="M22 32H42M32 22V42" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="drop-label">Drop DDS files here</div>
+          <div class="drop-hint">or <label class="file-link" for="fileDds">browse files</label></div>
+          <input type="file" id="fileDds" multiple accept=".dds" style="display:none"
+                 onchange="handleFileDds(this)"/>
+        </div>
+      </div>
+
+      <div class="queue" id="queueDds"></div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="btnConvertDds" onclick="convertAllDds()" disabled>
+          <span class="btn-icon">⚡</span> Convert All &amp; Download
+        </button>
+        <button class="btn btn-ghost" onclick="clearDdsQueue()">Clear</button>
+      </div>
+
+      <div class="log-panel" id="logDds"></div>
+    </section>
+
+    <!-- ═══════════════════ PNG → DDS ═══════════════════ -->
+    <section id="panelPngToDds" class="panel">
+      <div class="panel-header">
+        <h1>PNG to DDS Encoding</h1>
+        <p>Drop your PNG into the correct slot. Normal maps must be standard OpenGL (blue) — they'll be
+          automatically swizzled to WH3 orange (DXT5nm) before encoding. Material maps can be
+          dropped as a merged RGB or as individual greyscale channel images.</p>
+      </div>
+
+      <div class="toggle-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="cbMipmaps" checked/>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          Generate Mipmaps
+        </label>
+        <div class="format-badges">
+          <span class="fmt-badge colour">Colour: BC1_UNORM_SRGB</span>
+          <span class="fmt-badge material">Material: BC1_UNORM_SRGB</span>
+          <span class="fmt-badge normal">Normal: BC3_UNORM</span>
+          <span class="fmt-badge mask">Mask: BC3_UNORM</span>
+        </div>
+      </div>
+
+      <div class="encoder-grid">
+
+        <!-- Base Colour -->
+        <div class="encode-card">
+          <div class="card-header">
+            <span class="card-icon">🎨</span>
+            <div><div class="card-title">Base Colour</div><div class="card-fmt">BC1_UNORM_SRGB</div></div>
+          </div>
+          <div class="mini-drop" id="dropColour"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropColour')"
+               ondrop="(e=>{e.preventDefault();document.getElementById('dropColour').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'colour')})(event)">
+            <div class="mini-drop-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V8M9 11l3-3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              Drop PNG or <label class="file-link" for="fileColour">browse</label>
+              <input type="file" id="fileColour" accept=".png,.jpg,.jpeg,.tga" style="display:none"
+                     onchange="handleEncodeFile(this,'colour')"/>
+            </div>
+          </div>
+          <div class="file-list" id="fileListColour"></div>
+          <button class="btn btn-sm btn-primary" onclick="encodeType('colour')">Encode → DDS</button>
+        </div>
+
+        <!-- Normal Map -->
+        <div class="encode-card">
+          <div class="card-header">
+            <span class="card-icon">🔵</span>
+            <div><div class="card-title">Normal Map</div><div class="card-fmt">BC3_UNORM · Blue → Orange</div></div>
+          </div>
+          <div class="mini-drop" id="dropNormal"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropNormal')"
+               ondrop="(e=>{e.preventDefault();document.getElementById('dropNormal').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'normal')})(event)">
+            <div class="mini-drop-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V8M9 11l3-3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              Drop OpenGL PNG or <label class="file-link" for="fileNormal">browse</label>
+              <input type="file" id="fileNormal" accept=".png,.jpg,.jpeg" style="display:none"
+                     onchange="handleEncodeFile(this,'normal')"/>
+            </div>
+          </div>
+          <div class="file-list" id="fileListNormal"></div>
+          <button class="btn btn-sm btn-primary" onclick="encodeType('normal')">Encode → DDS</button>
+        </div>
+
+        <!-- Material Map — full width -->
+        <div class="encode-card card-full">
+          <div class="card-header">
+            <span class="card-icon">🟠</span>
+            <div><div class="card-title">Material Map</div><div class="card-fmt">BC1_UNORM_SRGB · R=Metallic G=Roughness B=AO</div></div>
+          </div>
+          <div class="material-sub-grid">
+            <div class="sub-card">
+              <div class="sub-card-label">Merged RGB</div>
+              <div class="mini-drop mini-drop-sm" id="dropMatMerged"
+                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatMerged')"
+                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatMerged').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_merged')})(event)">
+                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatMerged">browse</label>
+                  <input type="file" id="fileMatMerged" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_merged')"/>
+                </div>
+              </div>
+              <div class="file-list" id="fileListMatMerged"></div>
+            </div>
+            <div class="sub-card">
+              <div class="sub-card-label channel-r">R — Metallic</div>
+              <div class="mini-drop mini-drop-sm" id="dropMatR"
+                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatR')"
+                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatR').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_metallic')})(event)">
+                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatR">browse</label>
+                  <input type="file" id="fileMatR" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_metallic')"/>
+                </div>
+              </div>
+              <div class="file-list" id="fileListMatR"></div>
+            </div>
+            <div class="sub-card">
+              <div class="sub-card-label channel-g">G — Roughness</div>
+              <div class="mini-drop mini-drop-sm" id="dropMatG"
+                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatG')"
+                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatG').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_roughness')})(event)">
+                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatG">browse</label>
+                  <input type="file" id="fileMatG" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_roughness')"/>
+                </div>
+              </div>
+              <div class="file-list" id="fileListMatG"></div>
+            </div>
+            <div class="sub-card">
+              <div class="sub-card-label channel-b">B — Ambient Occlusion</div>
+              <div class="mini-drop mini-drop-sm" id="dropMatB"
+                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatB')"
+                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatB').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_ao')})(event)">
+                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatB">browse</label>
+                  <input type="file" id="fileMatB" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_ao')"/>
+                </div>
+              </div>
+              <div class="file-list" id="fileListMatB"></div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="encodeType('material')">Encode → DDS</button>
+        </div>
+
+        <!-- Mask -->
+        <div class="encode-card">
+          <div class="card-header">
+            <span class="card-icon">🔲</span>
+            <div><div class="card-title">Mask</div><div class="card-fmt">BC3_UNORM</div></div>
+          </div>
+          <div class="mini-drop" id="dropMask"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMask')"
+               ondrop="(e=>{e.preventDefault();document.getElementById('dropMask').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mask')})(event)">
+            <div class="mini-drop-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V8M9 11l3-3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              Drop PNG or <label class="file-link" for="fileMask">browse</label>
+              <input type="file" id="fileMask" accept=".png,.jpg" style="display:none"
+                     onchange="handleEncodeFile(this,'mask')"/>
+            </div>
+          </div>
+          <div class="file-list" id="fileListMask"></div>
+          <button class="btn btn-sm btn-primary" onclick="encodeType('mask')">Encode → DDS</button>
+        </div>
+
+      </div><!-- /encoder-grid -->
+
+      <div class="log-panel" id="logEncode"></div>
+    </section>
+
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
