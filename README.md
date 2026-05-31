@@ -1,108 +1,69 @@
 # WH3 Texture Converter
 
-A free, browser-based converter for **Warhammer 3: Total War** DDS textures.  
-No installs. No Python. No external tools. Everything runs directly in your browser.
+A simple, client-side web tool to convert Total War: Warhammer 3 DDS textures to compressionless PNG and back. No installation, Python, or external tools required. Everything runs locally in your browser.
 
-**[🚀 Open the Tool](https://mrfaux.github.io/WH3TWTexConv/)**
+👉 **[Launch Tool](https://mrfaux.github.io/WH3TWTexConv/)**
 
 ---
 
-## Features
+## What it does
 
-| Feature | Details |
-|---|---|
-| **DDS → PNG** | Drag & drop any WH3 `.dds` file, get a clean PNG back |
-| **Normal map swizzle** | Converts WH3 orange (DXT5nm) ↔ OpenGL blue automatically |
-| **Material map split** | Exports merged RGB + separate Metallic / Roughness / AO greyscale PNGs |
-| **PNG → DDS** | Encodes back to the correct BC format with mipmaps |
-| **No server** | Pure client-side JavaScript — works offline after first load |
+### DDS → PNG
+*   **Normal Maps:** Converts WH3's orange-tinted normal maps (DXT5nm) into standard blue OpenGL normal maps.
+*   **Material Maps:** Automatically splits channels and exports them as individual greyscale PNGs along with a merged RGB file.
+*   **Color & Masks:** Straight conversion to standard PNG.
 
-## Supported Formats
+### PNG → DDS
+*   **Normal Maps:** Converts standard blue normal maps back into the orange DXT5nm layout required by the engine.
+*   **Material Maps:** Rebuilds the custom material texture from individual channel maps or a merged file.
+*   **Formats Used:**
+    *   `Base_Colour`: `BC1_UNORM_SRGB`
+    *   `Material_Map`: `BC1_UNORM_SRGB`
+    *   `Normal`: `BC3_UNORM`
+    *   `Mask`: `BC3_UNORM`
+*   Optionally generates a full mipmap chain.
 
-| Texture Type | DDS Format |
-|---|---|
-| Base Colour | `BC1_UNORM_SRGB` |
-| Material Map | `BC1_UNORM_SRGB` |
-| Normal Map | `BC3_UNORM` (DXT5nm swizzle) |
-| Mask | `BC3_UNORM` |
+---
 
-## Normal Map Conversion
+## Channels & Formatting
 
-WH3 stores normal maps in **DXT5nm (orange)** format:
+### Material Map Layout
+*   **Red:** Metalness (usually `0` or `255`).
+*   **Green:** Roughness.
+*   **Blue:** Unused (forced to `0` during encoding).
+*   **Alpha:** Ambient Occlusion / Static AO (defaults to `255` / `1.0`).
 
-| Channel | Orange (WH3) | Blue (OpenGL/Standard) |
+### Normal Map Channels (DXT5nm swizzle)
+To reconstruct the normal map, we use the vector length formula:
+`Z = sqrt(max(0, 1 - X^2 - Y^2))`
+
+| Channel | Orange (Engine DDS) | Blue (Standard PNG) |
 |---|---|---|
-| R | Gloss multiplier for X | X normal |
-| G | Y normal | Y normal |
-| B | Unused | Z normal (reconstructed) |
-| A | X normal | — |
+| **Red** | Gloss / Scale Multiplier | X Vector |
+| **Green** | Y Vector | Y Vector |
+| **Blue** | Unused (`0`) | Z Vector |
+| **Alpha** | X Vector | Unused (`255`) |
 
-Conversion formula matches [mr-phazer's TheAssetEditor](https://github.com/mr-phazer/TheAssetEditor) exactly.
+*Swizzle logic based on [mr-phazer's TheAssetEditor](https://github.com/mr-phazer/TheAssetEditor).*
 
 ---
 
-## How to Host on GitHub Pages (Free)
+## Hosting on GitHub Pages (Free)
 
-### Step 1 — Create a GitHub repository
+1. Create a public GitHub repository named `wh3-tex-converter`.
+2. Upload the contents of the `wh3-tex-web` folder:
+    *   `index.html`
+    *   `style.css`
+    *   `LICENSE`
+    *   `js/` (containing the scripts)
+3. Go to **Settings** -> **Pages** in your repository.
+4. Set the build source to **Deploy from a branch**, choose `main` / `root`, and hit **Save**.
 
-1. Go to [github.com/new](https://github.com/new)
-2. Name it `wh3-tex-converter` (or anything you like)
-3. Set it to **Public**
-4. Click **Create repository**
+The tool will be live at `https://<your-username>.github.io/wh3-tex-converter/` in a couple of minutes.
 
-### Step 2 — Upload the files
-
-Upload the entire contents of the `wh3-tex-web/` folder to the repository root:
-```
-index.html
-style.css
-js/
-  app.js
-  dds-codec.js
-  texture-ops.js
-```
-
-You can drag & drop them on the GitHub web UI, or use git:
+### Local Hosting
+If you want to run it on your own machine, serve the folder using a local server (needed for ES module support):
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/wh3-tex-converter.git
-git push -u origin main
+python -m http.server 8080
 ```
-
-### Step 3 — Enable GitHub Pages
-
-1. Go to your repository → **Settings** → **Pages**
-2. Under **Source**, select **Deploy from a branch**
-3. Choose branch: `main`, folder: `/ (root)`
-4. Click **Save**
-
-Your site will be live at:
-```
-https://YOUR-USERNAME.github.io/wh3-tex-converter/
-```
-(takes ~1 minute to go live after first push)
-
----
-
-## Local Usage
-
-You can also run it locally — just open a terminal in the project folder and run:
-
-```bash
-py -m http.server 8080
-```
-
-Then open `http://127.0.0.1:8080` in your browser.
-
-> **Note:** You can't open `index.html` directly as a file (`file://`) because ES Modules require a server. Use the command above or any static file server.
-
----
-
-## Credits
-
-- Normal map conversion algorithm from [mr-phazer/TheAssetEditor](https://github.com/mr-phazer/TheAssetEditor) (`DdsToNormalPngExporter.cs`)
-- BC1/BC3 DDS codec written from scratch in pure JavaScript
-- No external dependencies
+Then visit `http://localhost:8080`.
