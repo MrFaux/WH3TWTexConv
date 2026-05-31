@@ -3,7 +3,7 @@
 A free, browser-based converter for **Warhammer 3: Total War** DDS textures.  
 No installs. No Python. No external tools. Everything runs directly in your browser.
 
-**[🚀 Open the Tool](https://mrfaux.github.io/WH3TWTexConv/)**
+**[🚀 Open the Tool](https://YOUR-USERNAME.github.io/wh3-tex-converter/)**
 
 ---
 

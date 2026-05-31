@@ -142,12 +142,12 @@ window.convertAllDds = async () => {
         // Merged
         const mergedBlob = await rgbaToBlob(rgba, width, height);
         downloadBlob(mergedBlob, `${stem}_merged.png`);
-        // Split channels
-        const { metallic, roughness, ao } = splitMaterialChannels(rgba, width, height);
-        downloadBlob(await rgbaToBlob(metallic,  width, height), `${stem}_metallic.png`);
-        downloadBlob(await rgbaToBlob(roughness, width, height), `${stem}_roughness.png`);
-        downloadBlob(await rgbaToBlob(ao,        width, height), `${stem}_ao.png`);
-        log('logDds', `✔ ${item.file.name} → merged + metallic + roughness + ao`, 'ok');
+        // Split channels: R=Metalness, G=Roughness, A=AO (B is always 0, skipped)
+        const { metalness, roughness, ao } = splitMaterialChannels(rgba, width, height);
+        downloadBlob(await rgbaToBlob(metalness,  width, height), `${stem}_metalness.png`);
+        downloadBlob(await rgbaToBlob(roughness,  width, height), `${stem}_roughness.png`);
+        downloadBlob(await rgbaToBlob(ao,         width, height), `${stem}_ao.png`);
+        log('logDds', `✔ ${item.file.name} → merged + metalness + roughness + ao`, 'ok');
 
       } else {
         const blob = await rgbaToBlob(rgba, width, height);

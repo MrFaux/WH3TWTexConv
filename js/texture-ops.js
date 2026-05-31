@@ -51,38 +51,44 @@ export function blueToOrange(rgba, width, height) {
   return out;
 }
 
-// ── Material map: RGB → 3 greyscale channels ─────────────────
-// R = Metallic, G = Roughness, B = Ambient Occlusion
+// ── Material map: RGB(A) → greyscale channels ───────────────
+// WH3 layout:
+//   R = Metalness  (typically 0 or 255 — non-metal vs metal)
+//   G = Roughness
+//   B = Not used   (always 0 in WH3)
+//   A = Ambient Occlusion (always 255/1.0 in WH3; 3K uses real AO bake)
 export function splitMaterialChannels(rgba, width, height) {
   const n = width * height;
-  const metallic  = new Uint8Array(n * 4);
+  const metalness = new Uint8Array(n * 4);
   const roughness = new Uint8Array(n * 4);
   const ao        = new Uint8Array(n * 4);
 
   for (let i = 0; i < n; i++) {
     const b = i * 4;
-    const R = rgba[b], G = rgba[b+1], Bl = rgba[b+2];
-    // Metallic (R → grey)
-    metallic[b]=R; metallic[b+1]=R; metallic[b+2]=R; metallic[b+3]=255;
-    // Roughness (G → grey)
+    const R = rgba[b],   G = rgba[b+1];
+    // B is always 0 in WH3 — not exported as a channel
+    const A = rgba[b+3]; // AO (255 in WH3, real bake in 3K)
+
+    metalness[b]=R; metalness[b+1]=R; metalness[b+2]=R; metalness[b+3]=255;
     roughness[b]=G; roughness[b+1]=G; roughness[b+2]=G; roughness[b+3]=255;
-    // AO (B → grey)
-    ao[b]=Bl; ao[b+1]=Bl; ao[b+2]=Bl; ao[b+3]=255;
+    ao[b]=A;        ao[b+1]=A;        ao[b+2]=A;        ao[b+3]=255;
   }
-  return { metallic, roughness, ao };
+  return { metalness, roughness, ao };
 }
 
-// ── Material map: merge channels → RGB ──────────────────────
-// Each input is RGBA (greyscale, only R channel used) or null → defaults to 128
+// ── Material map: merge channels → RGBA ─────────────────────
+// Inputs are RGBA greyscale buffers (only R channel used) or null.
+// B is forced to 0 (unused in WH3). A is forced to 255 (WH3 AO=max).
+// Pass an ao buffer to use a real AO bake (e.g. for 3K assets).
 export function mergeMaterialChannels(metRgba, roughRgba, aoRgba, width, height) {
   const n = width * height;
   const out = new Uint8Array(n * 4);
   for (let i = 0; i < n; i++) {
     const b = i * 4;
-    out[b]   = metRgba   ? metRgba[b]   : 128;
-    out[b+1] = roughRgba ? roughRgba[b] : 128;
-    out[b+2] = aoRgba    ? aoRgba[b]    : 128;
-    out[b+3] = 255;
+    out[b]   = metRgba   ? metRgba[b]   : 0;    // R = Metalness
+    out[b+1] = roughRgba ? roughRgba[b] : 128;  // G = Roughness
+    out[b+2] = 0;                                // B = always 0
+    out[b+3] = aoRgba    ? aoRgba[b]    : 255;  // A = AO (default max)
   }
   return out;
 }

@@ -166,7 +166,7 @@
         <div class="encode-card card-full">
           <div class="card-header">
             <span class="card-icon">🟠</span>
-            <div><div class="card-title">Material Map</div><div class="card-fmt">BC1_UNORM_SRGB · R=Metallic G=Roughness B=AO</div></div>
+            <div><div class="card-title">Material Map</div><div class="card-fmt">BC1_UNORM_SRGB &middot; R=Metalness &middot; G=Roughness &middot; B=0 &middot; A=AO(255)</div></div>
           </div>
           <div class="material-sub-grid">
             <div class="sub-card">
@@ -181,7 +181,7 @@
               <div class="file-list" id="fileListMatMerged"></div>
             </div>
             <div class="sub-card">
-              <div class="sub-card-label channel-r">R — Metallic</div>
+              <div class="sub-card-label channel-r">R — Metalness</div>
               <div class="mini-drop mini-drop-sm" id="dropMatR"
                    ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatR')"
                    ondrop="(e=>{e.preventDefault();document.getElementById('dropMatR').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_metallic')})(event)">
@@ -203,7 +203,13 @@
               <div class="file-list" id="fileListMatG"></div>
             </div>
             <div class="sub-card">
-              <div class="sub-card-label channel-b">B — Ambient Occlusion</div>
+              <div class="sub-card-label" style="color:var(--text-muted)">B — Unused (always 0)</div>
+              <div class="mini-drop mini-drop-sm" style="opacity:0.35;pointer-events:none">
+                <div class="mini-drop-inner">Forced to 0</div>
+              </div>
+            </div>
+            <div class="sub-card">
+              <div class="sub-card-label channel-b">A — AO (default 255)</div>
               <div class="mini-drop mini-drop-sm" id="dropMatB"
                    ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatB')"
                    ondrop="(e=>{e.preventDefault();document.getElementById('dropMatB').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_ao')})(event)">
