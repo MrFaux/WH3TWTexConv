@@ -33,6 +33,8 @@
         <div class="logo-text">
           <span class="logo-title">WH3 Texture Converter</span>
           <span class="logo-sub">Warhammer III · DDS ↔ PNG · Runs in Browser</span>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -67,18 +69,74 @@
         <div class="legend-chip mask">Mask → PNG + Alpha</div>
       </div>
 
-      <!-- Normal Map Decode Options -->
-      <div class="decode-options-row">
-        <div class="decode-option-group">
-          <span class="decode-option-label">Normal Map Output:</span>
-          <div class="mode-toggle">
-            <button class="toggle-btn active" id="btnDdsSwizzleOn" onclick="setDdsSwizzle(true)" type="button">Orange → Blue (OpenGL)</button>
-            <button class="toggle-btn" id="btnDdsSwizzleOff" onclick="setDdsSwizzle(false)" type="button">Keep Orange (DX)</button>
+      <!-- Advanced Settings & Guidelines Card -->
+      <div class="settings-card">
+        <div class="settings-title">
+          <span>⚙️</span> Conversion Options &amp; Guidelines
+        </div>
+        
+        <div class="settings-grid">
+          <!-- Column 1: Normal Maps -->
+          <div class="settings-col">
+            <div class="settings-col-title">Normal Map Output</div>
+            
+            <div class="settings-option">
+              <label class="settings-label">Color Space (Orange vs Blue)</label>
+              <div class="mode-toggle">
+                <button class="toggle-btn active" id="btnDdsColorBlue" onclick="setDdsColorSpace('blue')" type="button">Standard Blue (OpenGL)</button>
+                <button class="toggle-btn" id="btnDdsColorOrange" onclick="setDdsColorSpace('orange')" type="button">Raw Orange (DXT5nm)</button>
+              </div>
+              <p class="settings-hint">Standard Blue reconstructs standard normal coordinates. Raw Orange extracts raw DXT5nm channels as-is.</p>
+            </div>
+
+            <div class="settings-option" id="ddsNormalYGroup">
+              <label class="settings-label">Green (Y) Axis Orientation</label>
+              <div class="mode-toggle">
+                <button class="toggle-btn active" id="btnDdsNormGL" onclick="setDdsNormalY('opengl')" type="button">OpenGL (Y+ Up)</button>
+                <button class="toggle-btn" id="btnDdsNormDX" onclick="setDdsNormalY('directx')" type="button">DirectX (Y- Down)</button>
+              </div>
+              <p class="settings-hint">DirectX inverts the green channel (Y-). Only relevant for Standard Blue.</p>
+            </div>
+          </div>
+
+          <!-- Column 2: Material Maps -->
+          <div class="settings-col">
+            <div class="settings-col-title">Material Map Output</div>
+            
+            <div class="settings-option">
+              <label class="settings-label">Split or Merge Mode</label>
+              <div class="mode-toggle">
+                <button class="toggle-btn active" id="btnDdsMatBoth" onclick="setDdsMatOutput('both')" type="button">Export Both</button>
+                <button class="toggle-btn" id="btnDdsMatMerged" onclick="setDdsMatOutput('merged')" type="button">Merged Only</button>
+                <button class="toggle-btn" id="btnDdsMatChannels" onclick="setDdsMatOutput('channels')" type="button">Channels Only</button>
+              </div>
+              <p class="settings-hint">Merged is a packed texture map. Channels splits it into metallic/roughness/AO grayscale files.</p>
+            </div>
+          </div>
+
+          <!-- Column 3: Guidelines -->
+          <div class="settings-col settings-guide-col">
+            <div class="settings-col-title">💡 Recommendations</div>
+            <div class="settings-guide-box">
+              <p><strong>Unsure what to use? Keep defaults.</strong></p>
+              <ul>
+                <li><strong>OpenGL / Standard Blue</strong> is the default format used in 3D modeling programs like Blender, Substance Painter, and Asset Editor.</li>
+                <li><strong>Raw Orange</strong> should only be exported if you're writing custom shaders or doing manual channel packing.</li>
+                <li><strong>Export Both</strong> ensures you have both the pre-packed material map and individual channels for editing.</li>
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
-      <div id="ddsSwizzleWarning" class="swizzle-warning" style="display:none; margin-bottom: 12px;">
-        ⚠️ <strong>Keep Orange mode:</strong> Normal maps will be exported as-is in WH3's native DXT5nm format without converting to standard OpenGL blue. Only use this if you know what you're doing.
+
+        <!-- Dynamic Warnings Row -->
+        <div class="settings-warnings-row">
+          <div id="warnDdsOrange" class="swizzle-warning" style="display:none; margin-top: 10px;">
+            ⚠️ <strong>Raw Orange mode selected:</strong> Normal maps will be extracted as-is in WH3's native DXT5nm format. They will look orange in image viewers and must be converted to blue before being usable in standard DCC tools.
+          </div>
+          <div id="warnDdsDX" class="swizzle-warning" style="display:none; margin-top: 10px;">
+            ⚠️ <strong>DirectX green-channel flip selected:</strong> The exported PNG will have its green channel inverted (Y- convention). Only select this if your project pipeline specifically expects DirectX normals (e.g. Unreal Engine, 3ds Max).
+          </div>
+        </div>
       </div>
 
       <div class="drop-zone" id="dropZoneDds"
@@ -163,16 +221,16 @@
               <span class="card-icon">🔵</span>
               <div>
                 <div class="card-title">Normal Map</div>
-                <div class="card-fmt" id="normalFmtLabel">BC3_UNORM · OpenGL Blue → WH3 Orange (DXT5nm)</div>
+                <div class="card-fmt" id="normalFmtLabel">BC3_UNORM · OpenGL input → WH3 Orange (DXT5nm)</div>
               </div>
             </div>
             <div class="mode-toggle">
-              <button class="toggle-btn active" id="btnSwizzleOn" onclick="setSwizzle(true)" type="button">Swizzle DX↔GL</button>
-              <button class="toggle-btn" id="btnSwizzleOff" onclick="setSwizzle(false)" type="button">No Swizzle</button>
+              <button class="toggle-btn active" id="btnEncNormOpenGL" onclick="setEncNormalMode(false)" type="button">OpenGL input</button>
+              <button class="toggle-btn" id="btnEncNormDX" onclick="setEncNormalMode(true)" type="button">DirectX input (flip Y)</button>
             </div>
           </div>
           <div id="swizzleWarning" class="swizzle-warning" style="display:none;">
-            ⚠️ <strong>No swizzle mode:</strong> The PNG will be encoded as-is with no channel conversion. Only change this if you know exactly what you're doing.
+            ⚠️ <strong>DirectX input mode:</strong> Your PNG has the green (Y) channel inverted (DirectX convention). It will be unflipped before encoding into WH3's orange DXT5nm format. If you're not sure, leave this on OpenGL.
           </div>
           <div class="mini-drop" id="dropNormal"
                ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropNormal')"

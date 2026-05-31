@@ -33,6 +33,18 @@ export function orangeToBlue(rgba, width, height) {
   return out;
 }
 
+// ── Normal map: flip Y (green) channel — DX ↔ OpenGL ────────
+// The only difference between DirectX and OpenGL normal maps is that
+// DirectX inverts the Y (green) channel: G_dx = 255 - G_gl
+// This function works in both directions (applying it twice restores original).
+export function flipNormalY(rgba, width, height) {
+  const out = new Uint8Array(rgba);   // copy
+  for (let i = 0; i < width * height; i++) {
+    out[i * 4 + 1] = 255 - out[i * 4 + 1];  // invert G
+  }
+  return out;
+}
+
 // ── Normal map: OpenGL blue → WH3 orange (DXT5nm) ───────────
 // Reverse:
 //   new.R = 255 (gloss multiplier = 1.0, no attenuation)

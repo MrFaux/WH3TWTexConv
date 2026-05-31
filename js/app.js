@@ -3,15 +3,15 @@
  * Imports: dds-codec.js, texture-ops.js
  */
 import { decodeDDS, encodeDDS, DXGI_BC1_SRGB, DXGI_BC3 } from './dds-codec.js';
-import { orangeToBlue, blueToOrange, splitMaterialChannels, mergeMaterialChannels } from './texture-ops.js';
+import { orangeToBlue, blueToOrange, flipNormalY, splitMaterialChannels, mergeMaterialChannels } from './texture-ops.js';
 
 // ── State ────────────────────────────────────────────────────
 const ddsQueue = [];   // { file, id, detectedType }
 const encFiles = {};   // key → { file, rgba, width, height }
 let queueId = 0;
-let materialMode = 'merged'; // 'merged' or 'channels'
-let swizzleEnabled    = true;  // PNG→DDS: DX↔GL swizzle on encode
-let ddsSwizzleEnabled = true;  // DDS→PNG: orange→blue swizzle on decode
+let materialMode  = 'merged'; // 'merged' or 'channels'
+let encInputDX    = false;    // PNG→DDS: input PNG is DX (flip Y before encode)
+let ddsOutputDX   = false;    // DDS→PNG: output PNG as DX (flip Y after decode)
 
 window.setMaterialMode = (mode) => {
   materialMode = mode;
@@ -33,28 +33,60 @@ window.setMaterialMode = (mode) => {
   }
 };
 
-window.setSwizzle = (enabled) => {
-  swizzleEnabled = enabled;
-  document.getElementById('btnSwizzleOn').classList.toggle('active', enabled);
-  document.getElementById('btnSwizzleOff').classList.toggle('active', !enabled);
-  document.getElementById('swizzleWarning').style.display = enabled ? 'none' : 'block';
-  const fmtLabel = document.getElementById('normalFmtLabel');
+// PNG→DDS normal: toggle whether the input PNG uses DirectX conventions (flipped Y)
+window.setEncNormalMode = (dx) => {
+  encInputDX = dx;
+  document.getElementById('btnEncNormOpenGL').classList.toggle('active', !dx);
+  document.getElementById('btnEncNormDX').classList.toggle('active', dx);
+  document.getElementById('swizzleWarning').style.display = dx ? 'block' : 'none';
+  const fmtLabel  = document.getElementById('normalFmtLabel');
   const dropLabel = document.getElementById('normalDropLabel');
-  if (enabled) {
-    fmtLabel.textContent = 'BC3_UNORM · OpenGL Blue → WH3 Orange (DXT5nm)';
-    dropLabel.textContent = 'Drop OpenGL (blue) PNG or';
+  if (dx) {
+    fmtLabel.textContent  = 'BC3_UNORM · DirectX input (Y flipped) → WH3 Orange';
+    dropLabel.textContent = 'Drop DirectX normal PNG or';
   } else {
-    fmtLabel.textContent = 'BC3_UNORM · No channel conversion';
-    dropLabel.textContent = 'Drop PNG or';
+    fmtLabel.textContent  = 'BC3_UNORM · OpenGL input → WH3 Orange (DXT5nm)';
+    dropLabel.textContent = 'Drop OpenGL (blue) PNG or';
   }
 };
 
-window.setDdsSwizzle = (enabled) => {
-  ddsSwizzleEnabled = enabled;
-  document.getElementById('btnDdsSwizzleOn').classList.toggle('active', enabled);
-  document.getElementById('btnDdsSwizzleOff').classList.toggle('active', !enabled);
-  document.getElementById('ddsSwizzleWarning').style.display = enabled ? 'none' : 'block';
+let ddsDecodeOrangeToBlue = true; // DDS→PNG: decode DXT5nm orange → blue
+let ddsMaterialOutputMode = 'both'; // DDS→PNG: both, merged, or channels
+
+window.setDdsColorSpace = (space) => {
+  ddsDecodeOrangeToBlue = (space === 'blue');
+  document.getElementById('btnDdsColorBlue').classList.toggle('active', space === 'blue');
+  document.getElementById('btnDdsColorOrange').classList.toggle('active', space === 'orange');
+  
+  // Show/Hide Y orientation group & Orange warning
+  document.getElementById('ddsNormalYGroup').style.display = space === 'blue' ? 'block' : 'none';
+  document.getElementById('warnDdsOrange').style.display = space === 'orange' ? 'block' : 'none';
+  
+  // If raw orange is selected, DX normal warning shouldn't be active/shown
+  if (space === 'orange') {
+    document.getElementById('warnDdsDX').style.display = 'none';
+  } else {
+    document.getElementById('warnDdsDX').style.display = ddsOutputDX ? 'block' : 'none';
+  }
 };
+
+window.setDdsNormalY = (mode) => {
+  const isDX = (mode === 'directx');
+  ddsOutputDX = isDX;
+  document.getElementById('btnDdsNormGL').classList.toggle('active', mode === 'opengl');
+  document.getElementById('btnDdsNormDX').classList.toggle('active', mode === 'directx');
+  
+  // Show warning if user selects DirectX flip Y
+  document.getElementById('warnDdsDX').style.display = isDX ? 'block' : 'none';
+};
+
+window.setDdsMatOutput = (mode) => {
+  ddsMaterialOutputMode = mode;
+  document.getElementById('btnDdsMatBoth').classList.toggle('active', mode === 'both');
+  document.getElementById('btnDdsMatMerged').classList.toggle('active', mode === 'merged');
+  document.getElementById('btnDdsMatChannels').classList.toggle('active', mode === 'channels');
+};
+
 
 const FORMAT = {
   colour:   DXGI_BC1_SRGB,
@@ -179,24 +211,40 @@ window.convertAllDds = async () => {
       const type = item.type;
 
       if (type === 'normal') {
-        const outRgba = ddsSwizzleEnabled
-          ? orangeToBlue(rgba, width, height)
-          : rgba;  // keep WH3 orange as-is
-        const suffix = ddsSwizzleEnabled ? '_blue' : '_orange';
+        let outRgba;
+        let suffix;
+        if (ddsDecodeOrangeToBlue) {
+          outRgba = orangeToBlue(rgba, width, height);
+          if (ddsOutputDX) {
+            outRgba = flipNormalY(outRgba, width, height);
+            suffix = '_dx';
+          } else {
+            suffix = '_opengl';
+          }
+        } else {
+          outRgba = rgba;
+          suffix = '_orange';
+        }
+        
         const blob = await rgbaToBlob(outRgba, width, height);
         downloadBlob(blob, `${stem}${suffix}.png`);
         log('logDds', `✔ ${item.file.name} → ${stem}${suffix}.png`, 'ok');
 
       } else if (type === 'material') {
-        // Merged
-        const mergedBlob = await rgbaToBlob(rgba, width, height);
-        downloadBlob(mergedBlob, `${stem}_merged.png`);
-        // Split channels: R=Metalness, G=Roughness, A=AO (B is always 0, skipped)
-        const { metalness, roughness, ao } = splitMaterialChannels(rgba, width, height);
-        downloadBlob(await rgbaToBlob(metalness,  width, height), `${stem}_metalness.png`);
-        downloadBlob(await rgbaToBlob(roughness,  width, height), `${stem}_roughness.png`);
-        downloadBlob(await rgbaToBlob(ao,         width, height), `${stem}_ao.png`);
-        log('logDds', `✔ ${item.file.name} → merged + metalness + roughness + ao`, 'ok');
+        let msgParts = [];
+        if (ddsMaterialOutputMode === 'both' || ddsMaterialOutputMode === 'merged') {
+          const mergedBlob = await rgbaToBlob(rgba, width, height);
+          downloadBlob(mergedBlob, `${stem}_merged.png`);
+          msgParts.push('merged');
+        }
+        if (ddsMaterialOutputMode === 'both' || ddsMaterialOutputMode === 'channels') {
+          const { metalness, roughness, ao } = splitMaterialChannels(rgba, width, height);
+          downloadBlob(await rgbaToBlob(metalness,  width, height), `${stem}_metalness.png`);
+          downloadBlob(await rgbaToBlob(roughness,  width, height), `${stem}_roughness.png`);
+          downloadBlob(await rgbaToBlob(ao,         width, height), `${stem}_ao.png`);
+          msgParts.push('channels (metalness/roughness/ao)');
+        }
+        log('logDds', `✔ ${item.file.name} → ${msgParts.join(' + ')}`, 'ok');
 
       } else {
         const blob = await rgbaToBlob(rgba, width, height);
@@ -294,9 +342,9 @@ window.encodeType = async (type) => {
       if (!e) { log('logEncode', 'No normal map PNG loaded.', 'warn'); return; }
       ({ width, height } = e);
       stem = e.file.name.replace(/\.[^.]+$/, '');
-      rgba = swizzleEnabled
-        ? blueToOrange(e.rgba, width, height)   // OpenGL blue → WH3 orange
-        : e.rgba;                                // pass-through, no conversion
+      // If input is DirectX format (Y flipped), flip Y first so blueToOrange gets OpenGL
+      const normalRgba = encInputDX ? flipNormalY(e.rgba, width, height) : e.rgba;
+      rgba = blueToOrange(normalRgba, width, height);  // OpenGL → WH3 orange (DXT5nm)
 
     } else if (type === 'material') {
       if (materialMode === 'merged') {
