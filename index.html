@@ -67,6 +67,20 @@
         <div class="legend-chip mask">Mask → PNG + Alpha</div>
       </div>
 
+      <!-- Normal Map Decode Options -->
+      <div class="decode-options-row">
+        <div class="decode-option-group">
+          <span class="decode-option-label">Normal Map Output:</span>
+          <div class="mode-toggle">
+            <button class="toggle-btn active" id="btnDdsSwizzleOn" onclick="setDdsSwizzle(true)" type="button">Orange → Blue (OpenGL)</button>
+            <button class="toggle-btn" id="btnDdsSwizzleOff" onclick="setDdsSwizzle(false)" type="button">Keep Orange (DX)</button>
+          </div>
+        </div>
+      </div>
+      <div id="ddsSwizzleWarning" class="swizzle-warning" style="display:none; margin-bottom: 12px;">
+        ⚠️ <strong>Keep Orange mode:</strong> Normal maps will be exported as-is in WH3's native DXT5nm format without converting to standard OpenGL blue. Only use this if you know what you're doing.
+      </div>
+
       <div class="drop-zone" id="dropZoneDds"
            ondragover="handleDragOver(event)"
            ondragleave="handleDragLeave(event,'dropZoneDds')"
@@ -144,16 +158,28 @@
 
         <!-- Normal Map -->
         <div class="encode-card">
-          <div class="card-header">
-            <span class="card-icon">🔵</span>
-            <div><div class="card-title">Normal Map</div><div class="card-fmt">BC3_UNORM · Blue → Orange</div></div>
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;width:100%;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <span class="card-icon">🔵</span>
+              <div>
+                <div class="card-title">Normal Map</div>
+                <div class="card-fmt" id="normalFmtLabel">BC3_UNORM · OpenGL Blue → WH3 Orange (DXT5nm)</div>
+              </div>
+            </div>
+            <div class="mode-toggle">
+              <button class="toggle-btn active" id="btnSwizzleOn" onclick="setSwizzle(true)" type="button">Swizzle DX↔GL</button>
+              <button class="toggle-btn" id="btnSwizzleOff" onclick="setSwizzle(false)" type="button">No Swizzle</button>
+            </div>
+          </div>
+          <div id="swizzleWarning" class="swizzle-warning" style="display:none;">
+            ⚠️ <strong>No swizzle mode:</strong> The PNG will be encoded as-is with no channel conversion. Only change this if you know exactly what you're doing.
           </div>
           <div class="mini-drop" id="dropNormal"
                ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropNormal')"
                ondrop="(e=>{e.preventDefault();document.getElementById('dropNormal').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'normal')})(event)">
             <div class="mini-drop-inner">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V8M9 11l3-3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-              Drop OpenGL PNG or <label class="file-link" for="fileNormal">browse</label>
+              <span id="normalDropLabel">Drop OpenGL (blue) PNG or</span> <label class="file-link" for="fileNormal">browse</label>
               <input type="file" id="fileNormal" accept=".png,.jpg,.jpeg" style="display:none"
                      onchange="handleEncodeFile(this,'normal')"/>
             </div>
@@ -164,62 +190,62 @@
 
         <!-- Material Map — full width -->
         <div class="encode-card card-full">
-          <div class="card-header">
-            <span class="card-icon">🟠</span>
-            <div><div class="card-title">Material Map</div><div class="card-fmt">BC1_UNORM_SRGB &middot; R=Metalness &middot; G=Roughness &middot; B=0 &middot; A=AO(255)</div></div>
-          </div>
-          <div class="material-sub-grid">
-            <div class="sub-card">
-              <div class="sub-card-label">Merged RGB</div>
-              <div class="mini-drop mini-drop-sm" id="dropMatMerged"
-                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatMerged')"
-                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatMerged').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_merged')})(event)">
-                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatMerged">browse</label>
-                  <input type="file" id="fileMatMerged" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_merged')"/>
-                </div>
-              </div>
-              <div class="file-list" id="fileListMatMerged"></div>
-            </div>
-            <div class="sub-card">
-              <div class="sub-card-label channel-r">R — Metalness</div>
-              <div class="mini-drop mini-drop-sm" id="dropMatR"
-                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatR')"
-                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatR').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_metallic')})(event)">
-                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatR">browse</label>
-                  <input type="file" id="fileMatR" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_metallic')"/>
-                </div>
-              </div>
-              <div class="file-list" id="fileListMatR"></div>
-            </div>
-            <div class="sub-card">
-              <div class="sub-card-label channel-g">G — Roughness</div>
-              <div class="mini-drop mini-drop-sm" id="dropMatG"
-                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatG')"
-                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatG').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_roughness')})(event)">
-                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatG">browse</label>
-                  <input type="file" id="fileMatG" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_roughness')"/>
-                </div>
-              </div>
-              <div class="file-list" id="fileListMatG"></div>
-            </div>
-            <div class="sub-card">
-              <div class="sub-card-label" style="color:var(--text-muted)">B — Unused (always 0)</div>
-              <div class="mini-drop mini-drop-sm" style="opacity:0.35;pointer-events:none">
-                <div class="mini-drop-inner">Forced to 0</div>
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; width: 100%;">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+              <span class="card-icon">🟠</span>
+              <div>
+                <div class="card-title">Material Map</div>
+                <div class="card-fmt">BC1_UNORM_SRGB &middot; R=Metalness &middot; G=Roughness &middot; B=0 &middot; A=AO(255)</div>
               </div>
             </div>
-            <div class="sub-card">
-              <div class="sub-card-label channel-b">A — AO (default 255)</div>
-              <div class="mini-drop mini-drop-sm" id="dropMatB"
-                   ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatB')"
-                   ondrop="(e=>{e.preventDefault();document.getElementById('dropMatB').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_ao')})(event)">
-                <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatB">browse</label>
-                  <input type="file" id="fileMatB" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_ao')"/>
-                </div>
-              </div>
-              <div class="file-list" id="fileListMatB"></div>
+            <div class="mode-toggle">
+              <button class="toggle-btn active" id="btnMatModeMerged" onclick="setMaterialMode('merged')" type="button">Merged Map</button>
+              <button class="toggle-btn" id="btnMatModeChannels" onclick="setMaterialMode('channels')" type="button">Channels</button>
             </div>
           </div>
+
+          <!-- Merged Mode Container -->
+          <div id="matModeMergedContainer">
+            <div class="mini-drop" id="dropMatMerged"
+                 ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatMerged')"
+                 ondrop="(e=>{e.preventDefault();document.getElementById('dropMatMerged').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_merged')})(event)">
+              <div class="mini-drop-inner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V8M9 11l3-3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                Drop Merged PNG or <label class="file-link" for="fileMatMerged">browse</label>
+                <input type="file" id="fileMatMerged" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_merged')"/>
+              </div>
+            </div>
+            <div class="file-list" id="fileListMatMerged" style="margin-top: 8px;"></div>
+          </div>
+
+          <!-- Channels Mode Container (hidden by default) -->
+          <div id="matModeChannelsContainer" style="display: none;">
+            <div class="material-sub-grid">
+              <div class="sub-card">
+                <div class="sub-card-label channel-r">R — Metalness</div>
+                <div class="mini-drop mini-drop-sm" id="dropMatR"
+                     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatR')"
+                     ondrop="(e=>{e.preventDefault();document.getElementById('dropMatR').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_metallic')})(event)">
+                  <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatR">browse</label>
+                    <input type="file" id="fileMatR" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_metallic')"/>
+                  </div>
+                </div>
+                <div class="file-list" id="fileListMatR"></div>
+              </div>
+              <div class="sub-card">
+                <div class="sub-card-label channel-g">G — Roughness</div>
+                <div class="mini-drop mini-drop-sm" id="dropMatG"
+                     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'dropMatG')"
+                     ondrop="(e=>{e.preventDefault();document.getElementById('dropMatG').classList.remove('drag-over');if(e.dataTransfer.files[0])handleEncodeFile({files:e.dataTransfer.files},'mat_roughness')})(event)">
+                  <div class="mini-drop-inner">Drop or <label class="file-link" for="fileMatG">browse</label>
+                    <input type="file" id="fileMatG" accept=".png,.jpg" style="display:none" onchange="handleEncodeFile(this,'mat_roughness')"/>
+                  </div>
+                </div>
+                <div class="file-list" id="fileListMatG"></div>
+              </div>
+            </div>
+          </div>
+
           <button class="btn btn-sm btn-primary" onclick="encodeType('material')">Encode → DDS</button>
         </div>
 

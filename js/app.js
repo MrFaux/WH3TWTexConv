@@ -9,6 +9,52 @@ import { orangeToBlue, blueToOrange, splitMaterialChannels, mergeMaterialChannel
 const ddsQueue = [];   // { file, id, detectedType }
 const encFiles = {};   // key → { file, rgba, width, height }
 let queueId = 0;
+let materialMode = 'merged'; // 'merged' or 'channels'
+let swizzleEnabled    = true;  // PNG→DDS: DX↔GL swizzle on encode
+let ddsSwizzleEnabled = true;  // DDS→PNG: orange→blue swizzle on decode
+
+window.setMaterialMode = (mode) => {
+  materialMode = mode;
+  const btnMerged = document.getElementById('btnMatModeMerged');
+  const btnChannels = document.getElementById('btnMatModeChannels');
+  const containerMerged = document.getElementById('matModeMergedContainer');
+  const containerChannels = document.getElementById('matModeChannelsContainer');
+
+  if (mode === 'merged') {
+    btnMerged.classList.add('active');
+    btnChannels.classList.remove('active');
+    containerMerged.style.display = 'block';
+    containerChannels.style.display = 'none';
+  } else {
+    btnMerged.classList.remove('active');
+    btnChannels.classList.add('active');
+    containerMerged.style.display = 'none';
+    containerChannels.style.display = 'block';
+  }
+};
+
+window.setSwizzle = (enabled) => {
+  swizzleEnabled = enabled;
+  document.getElementById('btnSwizzleOn').classList.toggle('active', enabled);
+  document.getElementById('btnSwizzleOff').classList.toggle('active', !enabled);
+  document.getElementById('swizzleWarning').style.display = enabled ? 'none' : 'block';
+  const fmtLabel = document.getElementById('normalFmtLabel');
+  const dropLabel = document.getElementById('normalDropLabel');
+  if (enabled) {
+    fmtLabel.textContent = 'BC3_UNORM · OpenGL Blue → WH3 Orange (DXT5nm)';
+    dropLabel.textContent = 'Drop OpenGL (blue) PNG or';
+  } else {
+    fmtLabel.textContent = 'BC3_UNORM · No channel conversion';
+    dropLabel.textContent = 'Drop PNG or';
+  }
+};
+
+window.setDdsSwizzle = (enabled) => {
+  ddsSwizzleEnabled = enabled;
+  document.getElementById('btnDdsSwizzleOn').classList.toggle('active', enabled);
+  document.getElementById('btnDdsSwizzleOff').classList.toggle('active', !enabled);
+  document.getElementById('ddsSwizzleWarning').style.display = enabled ? 'none' : 'block';
+};
 
 const FORMAT = {
   colour:   DXGI_BC1_SRGB,
@@ -133,10 +179,13 @@ window.convertAllDds = async () => {
       const type = item.type;
 
       if (type === 'normal') {
-        const blueRgba = orangeToBlue(rgba, width, height);
-        const blob = await rgbaToBlob(blueRgba, width, height);
-        downloadBlob(blob, `${stem}_blue.png`);
-        log('logDds', `✔ ${item.file.name} → ${stem}_blue.png`, 'ok');
+        const outRgba = ddsSwizzleEnabled
+          ? orangeToBlue(rgba, width, height)
+          : rgba;  // keep WH3 orange as-is
+        const suffix = ddsSwizzleEnabled ? '_blue' : '_orange';
+        const blob = await rgbaToBlob(outRgba, width, height);
+        downloadBlob(blob, `${stem}${suffix}.png`);
+        log('logDds', `✔ ${item.file.name} → ${stem}${suffix}.png`, 'ok');
 
       } else if (type === 'material') {
         // Merged
@@ -245,24 +294,26 @@ window.encodeType = async (type) => {
       if (!e) { log('logEncode', 'No normal map PNG loaded.', 'warn'); return; }
       ({ width, height } = e);
       stem = e.file.name.replace(/\.[^.]+$/, '');
-      rgba = blueToOrange(e.rgba, width, height);   // convert blue → orange before DDS encode
+      rgba = swizzleEnabled
+        ? blueToOrange(e.rgba, width, height)   // OpenGL blue → WH3 orange
+        : e.rgba;                                // pass-through, no conversion
 
     } else if (type === 'material') {
-      const merged = encFiles.mat_merged;
-      const met    = encFiles.mat_metallic;
-      const rough  = encFiles.mat_roughness;
-      const ao     = encFiles.mat_ao;
-      if (!merged && !met && !rough && !ao) {
-        log('logEncode', 'No material PNGs loaded.', 'warn'); return;
-      }
-      // Use merged if present, else build from channels
-      if (merged) {
+      if (materialMode === 'merged') {
+        const merged = encFiles.mat_merged;
+        if (!merged) { log('logEncode', 'No merged material PNG loaded.', 'warn'); return; }
         ({ rgba, width, height } = merged);
         stem = merged.file.name.replace(/\.[^.]+$/, '');
       } else {
+        const met    = encFiles.mat_metallic;
+        const rough  = encFiles.mat_roughness;
+        const ao     = encFiles.mat_ao;
+        if (!met && !rough && !ao) {
+          log('logEncode', 'No material channel PNGs loaded (need at least one).', 'warn'); return;
+        }
         const ref = met || rough || ao;
         ({ width, height } = ref);
-        stem = ref.file.name.replace(/\.[^.]+$/, '');
+        stem = ref.file.name.replace(/\.[^.]+$/, '') + '_material';
         rgba = mergeMaterialChannels(
           met?.rgba   || null,
           rough?.rgba || null,
